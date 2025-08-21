@@ -40,5 +40,5 @@
 
 - name: Check if response is JSON and retrieve text
   ansible.builtin.debug:
-    msg: "{{ ai_response }}"
+    msg: "{{ ai_response.content }}"
     

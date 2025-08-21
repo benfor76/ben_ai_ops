@@ -13,8 +13,6 @@
       messages:
         - 'role': 'system'
           'content': '{{ prompt }}'
-        - 'role': 'user'
-          'content': '{{ service_log_output }}'
       model: "{{ ai_model }}"
       max_tokens: "{{ max_tokens | default('500') }}"
       temperature: 0
@@ -40,70 +38,7 @@
   ansible.builtin.set_fact:
     ai_response: "{{ response.json.choices[0].message.content | default('No response') }}"
 
-- name: Set fact for service config
-  ansible.builtin.set_fact:
-    service_config: "{{ service_issue }}.conf"
-
-- name: Pass lightspeed_prompt
-  ansible.builtin.set_stats:
-    data:
-      lightspeed_prompt: "Copy files/{{ service_config }} to {{ service_config }} location and restart {{ service_issue }} service"
-      ai_response: "{{ ai_response }}"
-  when: response.json is defined and response.json.choices is defined and service_config in response.json.choices[0].message.content
-
-- name: Send notification message via Mattermost
-  community.general.mattermost:
-    url: "{{ mattermost_url }}"
-    api_key: "{{ mattermost_api_key }}"
-    attachments:
-      - text: "data model {{ response.json.model | basename if response.json is defined else 'Model not found' }}"
-        color: '#37a3a3'
-        title: AI Analysis Performed
-        fields:
-          - title: Ansible Prompt
-            value: "{{ prompt }} on logs: {{ service_log_output }}"
-            short: true
-          - title: InstructLab AI Root Cause
-            value: "{{ ai_response.rootCause | default('No response') }}"
-            short: true
-          - title: Remediation Steps
-            value: "{{ ai_response.remediationSteps | default('No Steps') }}"
-            short: true
-
-- name: Write log output to EE
-  ansible.builtin.copy:
-    content: "{{ service_log_output }}"
-    dest: /tmp/logs.txt
-    mode: '0600'
-
-- name: Create an incident in ServiceNow
-  servicenow.itsm.incident:
-    state: new
-    description: A {{ service_issue }} incident has occurred on {{ vm_name }} with AI determined RCA {{  ai_response.rootCause | default('No response') }}
-    short_description: A {{ service_issue }} incident has been detected on {{ vm_name }}
-    caller: admin
-    urgency: medium
-    impact: high
-    other:
-      u_vm_name: "{{ vm_name | default(omit) }}"
-      assignment_group: "{{ ai_response.escalateTo | default(omit) }}"
-      comments: "Remediation Steps: {{ ai_response.remediationSteps | default(omit) }}"
-    attachments:
-      - path: /tmp/logs.txt
-        name: "{{ service_issue | default(omit) }} logs"
-  register: new_incident
-  delegate_to: localhost
-
-- name: Display incident number
+- name: Check if response is JSON and retrieve text
   ansible.builtin.debug:
-    var: new_incident.record.number
-
-- name: Pass incident number
-  ansible.builtin.set_stats:
-    data:
-      ticket_number: "{{ new_incident.record.number }}"
-
-- name: Pass Incident Link to rest of workflow
-  ansible.builtin.set_stats:
-    data:
-      snow_incident_link: "ServiceNow Incident: {{ lookup('env', 'SN_HOST') }}nav_to.do?uri=incident.do?sysparm_query=number={{ new_incident.record.number }} "
+    msg: "{{ ai_response }}"
+    

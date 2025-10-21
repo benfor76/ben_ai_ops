@@ -22,18 +22,6 @@
     timeout: 60
   register: response
 
-- name: Check if response is JSON and debug output
-  ansible.builtin.debug:
-    msg: "{{ response.json if response.json is defined else response.content }}"
-
-- name: Check if response is JSON and retrieve model name
-  ansible.builtin.debug:
-    msg: "{{ response.json.model | basename if response.json is defined else 'Model not found' }}"
-
-- name: Check if response is JSON and retrieve text
-  ansible.builtin.debug:
-    msg: "{{ response.json.choices[0].message.content if response.json is defined and response.json.choices is defined else 'Text not found' }}"
-
 - name: Set AI Response
   ansible.builtin.set_fact:
     ai_response: "{{ response.json.choices[0].message.content | default('No response') }}"
